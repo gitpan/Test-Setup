@@ -1,0 +1,91 @@
+NAME
+    Test::Setup - Test Setup::* modules
+
+VERSION
+    version 1.01
+
+FUNCTIONS
+  test_setup(%args)
+    Test a setup function. Will call setup function several times to test
+    dry run and undo features.
+
+    Arguments ("*" denotes required arguments):
+
+    *   name* => STR
+
+        The test name.
+
+    *   function* => STR or CODE
+
+        The setup function to test.
+
+    *   args* => HASH
+
+        Arguments to feed to setup function. Note that you should not add
+        special arguments like -dry_run, -undo_action, -undo_data because
+        they will be added by test_setup(). -undo_hint can be passed,
+        though.
+
+    *   check_unsetup* => CODE
+
+        Supply code to check the condition before setup (or after undo). For
+        example if the setup function is setup_file, the code should check
+        whether the file does not exist.
+
+        Will be run before setup or after undo.
+
+    *   check_setup => CODE
+
+        Supply code to check the set up condition. For example if the setup
+        function is setup_file, the code should check whether the file
+        exists.
+
+        Will be run after do or redo.
+
+    *   arg_error => BOOL (default 0)
+
+        If set to 1, test_setup() will just test whether setup function will
+        return 4xx status when fed with arguments.
+
+    *   set_state1 => CODE (optional)
+
+    *   check_state1 => CODE (optional)
+
+        If set, test_setup() will execute set_state1 after the 'do' action.
+        The code is supposed to change state (to a state called 'state1') so
+        that the 'undo' step will refuse to undo because state has changed.
+
+        If set, the 'undo' action should fail to perform undo (condition
+        should still at 'state1', checked by check_state1). test_setup()
+        will not perform the rest of the tests after this (undo, redo, etc).
+
+    *   set_state2 => CODE (optional)
+
+    *   check_state2 => CODE (optional)
+
+        If set, test_setup() will execute set_state2 after the 'undo'
+        action. The code is supposed to change state (to a state called
+        'state2') so that the 'redo' step will refuse to redo because state
+        has changed.
+
+        If set, the 'redo' action should fail to perform redo (condition
+        should still at 'state2', checked by check_state2). test_setup()
+        will not perform the rest of the tests after this (redo, etc).
+
+    *   prepare => CODE (optional)
+
+        Code to run before calling any setup function.
+
+    *   cleanup => CODE (optional)
+
+        Code to run after calling all setup function.
+
+AUTHOR
+    Steven Haryanto <stevenharyanto@gmail.com>
+
+COPYRIGHT AND LICENSE
+    This software is copyright (c) 2012 by Steven Haryanto.
+
+    This is free software; you can redistribute it and/or modify it under
+    the same terms as the Perl 5 programming language system itself.
+
