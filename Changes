@@ -1,5 +1,10 @@
 Revision history for Test-Setup
 
-1.01    2012-03-28
+1.02    2012-08-16 (SHARYANTO) (not yet released)
+
+        Adjust to Perinci::Sub::Gen::Undoable 0.25 which requires transaction.
+
+
+1.01    2012-03-28 (SHARYANTO)
 
         First release, split from Setup-File / Setup.

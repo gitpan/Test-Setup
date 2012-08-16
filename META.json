@@ -1,0 +1,47 @@
+{
+   "abstract" : "Test Setup::* modules",
+   "author" : [
+      "Steven Haryanto <stevenharyanto@gmail.com>"
+   ],
+   "dynamic_config" : 0,
+   "generated_by" : "Dist::Zilla version 4.300006, CPAN::Meta::Converter version 2.113640",
+   "license" : [
+      "perl_5"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Test-Setup",
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "Module::Build" : "0.3601"
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Module::Build" : "0.3601"
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "File::chdir" : 0,
+            "Perinci::Access::InProcess" : "0.29",
+            "Perinci::Tx::Manager" : "0.29",
+            "Setup" : "v1.0.2",
+            "UUID::Random" : 0,
+            "perl" : "5.010000"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "homepage" : "http://search.cpan.org/dist/Test-Setup/",
+      "repository" : {
+         "url" : "http://github.com/sharyanto/perl-Test-Setup"
+      }
+   },
+   "version" : "1.02"
+}
+

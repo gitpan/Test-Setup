@@ -17,13 +17,17 @@ my %module_build_args = (
     "Steven Haryanto <stevenharyanto\@gmail.com>"
   ],
   "dist_name" => "Test-Setup",
-  "dist_version" => "1.01",
+  "dist_version" => "1.02",
   "license" => "perl",
   "module_name" => "Test::Setup",
   "recommends" => {},
   "recursive_test_files" => 1,
   "requires" => {
-    "Setup" => "1.",
+    "File::chdir" => 0,
+    "Perinci::Access::InProcess" => "0.29",
+    "Perinci::Tx::Manager" => "0.29",
+    "Setup" => "v1.0.2",
+    "UUID::Random" => 0,
     "perl" => "5.010000"
   },
   "script_files" => []

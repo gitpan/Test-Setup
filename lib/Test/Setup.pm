@@ -4,9 +4,14 @@ use 5.010;
 use strict;
 use warnings;
 
+use File::chdir;
+use Perinci::Access::InProcess 0.29;
+use Perinci::Tx::Manager 0.29;
+use Scalar::Util qw(blessed);
 use Test::More 0.96;
+use UUID::Random;
 
-our $VERSION = '1.01'; # VERSION
+our $VERSION = '1.02'; # VERSION
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -14,6 +19,18 @@ our @EXPORT_OK = qw(test_setup);
 
 sub test_setup {
     my %tsargs = @_;
+
+    my $tmpdir = $tsargs{tmpdir} or die "BUG: please supply tmpdir";
+    state $tm;
+    my $pa = Perinci::Access::InProcess->new(
+        use_tx=>1,
+        custom_tx_manager => sub {
+            my $self = shift;
+            $tm //= Perinci::Tx::Manager->new(
+                data_dir => "$tmpdir/.tx", pa => $self);
+            die $tm unless blessed($tm);
+            $tm;
+        });
 
     my $name  = $tsargs{name};
     my $func  = $tsargs{function};
@@ -29,6 +46,14 @@ sub test_setup {
         my ($res, $undo_data, $redo_data, $undo_data2);
         my $exit;
 
+        my $tx_id = UUID::Random::generate();
+        $res = $pa->request(begin_tx => "/", {tx_id=>$tx_id});
+        unless (is($res->[0], 200, "begin tx successful")) {
+            diag "res = ", explain($res);
+            goto END_TESTS;
+        }
+
+
         if ($tsargs{prepare}) {
             #diag "Running prepare ...";
             $tsargs{prepare}->();
@@ -41,7 +66,7 @@ sub test_setup {
         goto END_TESTS unless Test::More->builder->is_passing;
 
         subtest "do (dry run)" => sub {
-            my %fargs = (%$fargs,  -undo_action=>'do',
+            my %fargs = (%$fargs,  -undo_action=>'do', -tx_manager=>$tm,
                          -dry_run=>1);
             $res = $func->(%fargs);
             if ($tsargs{dry_do_error}) {
@@ -49,7 +74,13 @@ sub test_setup {
                    "status is $tsargs{dry_do_error}");
                 $exit++;
             } else {
-                $chku->();
+                if (is($res->[0], 200, "status 200")) {
+                    $chku->();
+                    $undo_data = $res->[3]{undo_data};
+                    ok($undo_data, "function returns undo_data");
+                } else {
+                    diag "res = ", explain($res);
+                };
             }
             done_testing;
         };
@@ -57,27 +88,33 @@ sub test_setup {
         goto END_TESTS unless Test::More->builder->is_passing;
 
         subtest "do" => sub {
-            my %fargs = (%$fargs,  -undo_action=>'do');
+            my %fargs = (%$fargs,  -undo_action=>'do', -tx_manager=>$tm);
             $res = $func->(%fargs);
             if ($tsargs{do_error}) {
                 is($res->[0], $tsargs{do_error},
                    "status is $tsargs{do_error}");
                 $exit++;
             } else {
-                $chks->();
-                $undo_data = $res->[3]{undo_data};
-                ok($undo_data, "function returns undo_data");
+                if (is($res->[0], 200, "status 200")) {
+                    $chks->();
+                    $undo_data = $res->[3]{undo_data};
+                    ok($undo_data, "function returns undo_data");
+                } else {
+                    diag "res = ", explain($res);
+                }
             }
             done_testing;
         };
-        goto END_TESTS if $exit;
         goto END_TESTS unless Test::More->builder->is_passing;
 
         subtest "repeat do -> noop (idempotent)" => sub {
-            my %fargs = (%$fargs,  -undo_action=>'do');
+            my %fargs = (%$fargs,  -undo_action=>'do', -tx_manager=>$tm);
             $res = $func->(%fargs);
-            $chks->();
-            is($res->[0], 304, "status 304");
+            if (is($res->[0], 304, "status 304")) {
+                $chks->();
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
@@ -85,7 +122,7 @@ sub test_setup {
         if ($tsargs{set_state1} && $tsargs{check_state1}) {
             $tsargs{set_state1}->();
             subtest "undo after state changed" => sub {
-                my %fargs = (%$fargs, -undo_action=>'undo',
+                my %fargs = (%$fargs, -undo_action=>'undo', -tx_manager=>$tm,
                              -undo_data=>$undo_data);
                 $res = $func->(%fargs);
                 $tsargs{check_state1}->();
@@ -96,19 +133,28 @@ sub test_setup {
 
         subtest "undo (dry run)" => sub {
             my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$undo_data,
-                         -dry_run=>1);
+                         -tx_manager=>$tm, -dry_run=>1);
             $res = $func->(%fargs);
-            $chks->();
+            if (is($res->[0], 200, "status 200")) {
+                $chks->();
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
 
         subtest "undo" => sub {
-            my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$undo_data);
+            my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$undo_data,
+                         -tx_manager=>$tm);
             $res = $func->(%fargs);
-            $chku->();
-            $redo_data = $res->[3]{undo_data};
-            ok($redo_data, "function returns undo_data (for redo)");
+            if (is($res->[0], 200, "status 200")) {
+                $chku->();
+                $redo_data = $res->[3]{undo_data};
+                ok($redo_data, "function returns undo_data (for redo)");
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
@@ -121,7 +167,7 @@ sub test_setup {
             $tsargs{set_state2}->();
             subtest "redo after state changed" => sub {
                 my %fargs = (%$fargs, -undo_action=>'undo',
-                             -undo_data=>$redo_data);
+                             -undo_data=>$redo_data, -tx_manager=>$tm);
                 $res = $func->(%fargs);
                 $tsargs{check_state2}->();
                 done_testing;
@@ -131,19 +177,28 @@ sub test_setup {
 
         subtest "redo (dry run)" => sub {
             my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$redo_data,
-                         -dry_run=>1);
+                         -tx_manager=>$tm, -dry_run=>1);
             $res = $func->(%fargs);
-            $chku->();
+            if (is($res->[0], 200, "status 200")) {
+                $chku->();
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
 
         subtest "redo" => sub {
-            my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$redo_data);
+            my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$redo_data,
+                         -tx_manager=>$tm);
             $res = $func->(%fargs);
-            $chks->();
-            $undo_data2 = $res->[3]{undo_data};
-            ok($undo_data2, "function returns undo_data (for undoing redo)");
+            if (is($res->[0], 200, "status 200")) {
+                $chks->();
+                $undo_data2 = $res->[3]{undo_data};
+                ok($undo_data2,"function returns undo_data (for undoing redo)");
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
@@ -152,51 +207,60 @@ sub test_setup {
 
         subtest "undo redo (dry run)" => sub {
             my %fargs = (%$fargs, -undo_action=>'undo', -undo_data=>$undo_data2,
-                         -dry_run=>1);
+                         -tx_manager=>$tm, -dry_run=>1);
             $res = $func->(%fargs);
-            $chks->();
+            if (is($res->[0], 200, "status 200")) {
+                $chks->();
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
 
         subtest "undo redo" => sub {
             my %fargs = (%$fargs, -undo_action=>'undo',
-                         -undo_data=>$undo_data2);
+                         -undo_data=>$undo_data2, -tx_manager=>$tm);
             $res = $func->(%fargs);
-            $chku->();
-            #$redo_data2 = $res->[3]{undo_data};
-            #ok($redo_data2, "function returns undo_data");
+            if (is($res->[0], 200, "status 200")) {
+                $chku->();
+                #$redo_data2 = $res->[3]{undo_data};
+                #ok($redo_data2, "function returns undo_data");
+            } else {
+                diag "res = ", explain($res);
+            }
             done_testing;
         };
         goto END_TESTS unless Test::More->builder->is_passing;
 
         # note: repeat undo redo is NOT guaranteed to be noop.
 
-        subtest "normal (without undo) (dry run)" => sub {
-            my %fargs = (%$fargs,
-                         -dry_run=>1);
-            $res = $func->(%fargs);
-            $chku->();
-            done_testing;
-        };
-        goto END_TESTS unless Test::More->builder->is_passing;
-
-        subtest "normal (without undo)" => sub {
-            my %fargs = (%$fargs);
-            $res = $func->(%fargs);
-            $chks->();
-            done_testing;
-        };
-        goto END_TESTS unless Test::More->builder->is_passing;
-
-        subtest "repeat normal -> noop (idempotent)" => sub {
-            my %fargs = (%$fargs);
-            $res = $func->(%fargs);
-            $chks->();
-            is($res->[0], 304, "status 304");
-            done_testing;
-        };
-        goto END_TESTS unless Test::More->builder->is_passing;
+        ## can no longer be done, perigen-undo 0.25+ requires tx
+        #subtest "normal (without undo) (dry run)" => sub {
+        #    my %fargs = (%$fargs,
+        #                 -dry_run=>1);
+        #    $res = $func->(%fargs);
+        #    $chku->();
+        #    done_testing;
+        #};
+        #goto END_TESTS unless Test::More->builder->is_passing;
+        #
+        #subtest "normal (without undo)" => sub {
+        #    my %fargs = (%$fargs);
+        #    $res = $func->(%fargs);
+        #    $chks->();
+        #    done_testing;
+        #};
+        #goto END_TESTS unless Test::More->builder->is_passing;
+        #
+        #subtest "repeat normal -> noop (idempotent)" => sub {
+        #    my %fargs = (%$fargs);
+        #    $res = $func->(%fargs);
+        #    $chks->();
+        #    is($res->[0], 304, "status 304");
+        #    done_testing;
+        #};
+        #goto END_TESTS unless Test::More->builder->is_passing;
 
       END_TESTS:
         if ($tsargs{cleanup}) {
@@ -220,7 +284,7 @@ Test::Setup - Test Setup::* modules
 
 =head1 VERSION
 
-version 1.01
+version 1.02
 
 =head1 FUNCTIONS
 
@@ -245,7 +309,7 @@ The setup function to test.
 
 Arguments to feed to setup function. Note that you should not add special
 arguments like -dry_run, -undo_action, -undo_data because they will be added by
-test_setup(). -undo_hint can be passed, though.
+test_setup(). -undo_trash_dir can be passed, though.
 
 =item * check_unsetup* => CODE
 

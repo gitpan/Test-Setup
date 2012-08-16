@@ -2,7 +2,7 @@ NAME
     Test::Setup - Test Setup::* modules
 
 VERSION
-    version 1.01
+    version 1.02
 
 FUNCTIONS
   test_setup(%args)
@@ -23,7 +23,7 @@ FUNCTIONS
 
         Arguments to feed to setup function. Note that you should not add
         special arguments like -dry_run, -undo_action, -undo_data because
-        they will be added by test_setup(). -undo_hint can be passed,
+        they will be added by test_setup(). -undo_trash_dir can be passed,
         though.
 
     *   check_unsetup* => CODE
